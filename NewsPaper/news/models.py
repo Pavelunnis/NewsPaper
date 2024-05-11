@@ -1,6 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import User
 from django.db.models import Sum
+from django.urls import reverse
 #from django.db.models.functions import Coalesce если None коментов или постов
 
 class Author(models.Model):
@@ -21,7 +22,8 @@ class Author(models.Model):
 
 class Category(models.Model):
     category = models.CharField(max_length=64)
-
+    def __str__(self):
+        return self.category
 
 class Post(models.Model):
     autor = models.ForeignKey(Author, on_delete=models.CASCADE)
@@ -49,6 +51,9 @@ class Post(models.Model):
 
     def preview(self):
         return self.textpost[0:123] + "..."
+
+    def get_absolute_url(self):
+        return reverse('news_detail', args=[str(self.id)])
 
 
 class PostCategory(models.Model):
