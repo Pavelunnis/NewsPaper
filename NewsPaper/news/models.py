@@ -4,6 +4,7 @@ from django.db.models import Sum
 from django.urls import reverse
 #from django.db.models.functions import Coalesce если None коментов или постов
 
+
 class Author(models.Model):
     authorUser = models.OneToOneField(User, on_delete=models.CASCADE)
     ratingAuthor = models.IntegerField(default=0)
@@ -24,6 +25,7 @@ class Category(models.Model):
     category = models.CharField(max_length=64)
     def __str__(self):
         return self.category
+
 
 class Post(models.Model):
     autor = models.ForeignKey(Author, on_delete=models.CASCADE)
