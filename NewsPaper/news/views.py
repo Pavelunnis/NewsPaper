@@ -14,6 +14,7 @@ from django.shortcuts import render
 from django.views.decorators.csrf import csrf_protect
 from django.template.loader import render_to_string
 from django.shortcuts import redirect
+from django.core.cache import cache
 
 
 class NewsList(ListView):
@@ -38,6 +39,16 @@ class NewsDetail(DetailView):
     model = Post
     template_name = 'Post.html'
     context_object_name = 'Post'
+
+    def get_object(self, *args, **kwargs):  # переопределяем метод получения объекта, как ни странно
+        obj = cache.get(f'news-{self.kwargs["pk"]}',
+                        None)  # кэш очень похож на словарь, и метод get действует так же. Он забирает значение по ключу, если его нет, то забирает None.
+
+        # если объекта нет в кэше, то получаем его и записываем в кэш
+        if not obj:
+            obj = super().get_object(queryset=self.queryset)
+            cache.set(f'news-{self.kwargs["pk"]}', obj)
+            return obj
 
 
 class PostSearch(ListView):
@@ -88,6 +99,20 @@ class PostDelete(PermissionRequiredMixin, DeleteView):
     permission_required = ("news.change_post")
 
 
+def add_subscribe(request, **kwargs):
+    pk = request.GET.get('pk', )
+    Category.objects.get(pk=pk).subscribers.add(request.user)
+    return redirect('/news/')
+
+
+# функция отписки от группы
+@login_required
+def del_subscribe(request, **kwargs):
+    pk = request.GET.get('pk', )
+    Category.objects.get(pk=pk).subscribers.remove(request.user)
+    return redirect('/news/')
+
+
 @login_required
 @csrf_protect
 def subscriptions(request):
@@ -119,47 +144,17 @@ def subscriptions(request):
     )
 
 def send_mail_for_sub(instance):
-    print('Представления - начало')
-    print()
-    print('====================ПРОВЕРКА СИГНАЛОВ===========================')
-    print()
-    print('задача - отправка письма подписчикам при добавлении новой статьи')
+    sub_text = instance.textPost
+    categories = instance.postCategory.all()
+    for category in categories:
+        subscribers = category.subscribers.all()
 
-    sub_text = instance.text
+        for subscriber in subscribers:
+            html_content = render_to_string(
+                'mail.html', {'user': subscriber, 'text': sub_text[:50], 'post': instance})
 
-    category = Category.objects.get(pk=Post.objects.get(pk=instance.pk).category.pk)
-    print()
-    print('category:', category)
-    print()
-    subscribers = category.subscribers.all()
-
-
-    print('Адреса рассылки:')
-    for pos in subscribers:
-        print(pos.email)
-
-    print()
-    print()
-    print()
-    for subscriber in subscribers:
-
-        print('**********************', subscriber.email, '**********************')
-        print(subscriber)
-        print('Адресат:', subscriber.email)
-
-        html_content = render_to_string(
-            'mail.html', {'user': subscriber, 'text': sub_text[:50], 'post': instance})
-
-        sub_username = subscriber.username
-        sub_useremail = subscriber.email
-
-        print()
-        print(html_content)
-        print()
-
-        send_mail_for_sub_once.delay(sub_username, sub_useremail, html_content)
-
-
-    print('Представления - конец')
+            sub_username = subscriber.username
+            sub_useremail = subscriber.email
+            send_mail_for_sub_once.delay(sub_username, sub_useremail, html_content)
 
     return redirect('/news/')
